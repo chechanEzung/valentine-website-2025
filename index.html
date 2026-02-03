@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Enhanced Car Mini Game with Your Image</title>
+<title>Snake Game with Start Button</title>
 <!-- Google Fonts for style -->
 <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Montserrat&display=swap" rel="stylesheet" />
 <style>
@@ -17,9 +17,8 @@
   #gameArea {
     position: relative;
     width: 100%;
-    height: 600px;
+    height: 100vh;
     background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364);
-    overflow: hidden;
   }
 
   #score {
@@ -30,28 +29,6 @@
     font-size: 24px;
     font-family: 'Pacifico', cursive;
     z-index: 10;
-  }
-
-  #car {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 80px; /* size for your image */
-    height: auto;
-    cursor: pointer;
-    z-index: 5;
-  }
-
-  /* Style for obstacles */
-  .obstacle {
-    position: absolute;
-    top: -60px;
-    width: 60px;
-    height: 60px;
-    background: radial-gradient(circle, #00b09b, #96c93d);
-    border-radius: 15px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
   }
 
   #restartBtn {
@@ -72,8 +49,63 @@
     font-family: 'Pacifico', cursive;
   }
 
-  #restartBtn:hover {
-    background-color: #ff6b6b;
+  /* Loading overlay with initial image */
+  #loadingOverlay {
+    position: fixed;
+    top:0; left:0; right:0; bottom:0;
+    background-color: rgba(0,0,0,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    flex-direction: column;
+  }
+
+  #loadingOverlay img {
+    max-width: 80%;
+    height: auto;
+    margin-bottom: 20px;
+  }
+
+  #startBtn {
+    padding: 15px 30px;
+    font-size: 1.5em;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    font-family: 'Pacifico', cursive;
+  }
+
+  /* Style for snake segments and food */
+  .snake {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background: transparent;
+    z-index: 5;
+  }
+
+  .food {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background: #ffd700;
+    border-radius: 50%;
+    box-shadow: 0 0 10px #ffd700;
+  }
+
+  /* Image after game over below restart button */
+  #gameOverImage {
+    display: none;
+    position: absolute;
+    top: calc(100% - 160px);
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 150px;
+    max-height: 150px;
+    z-index: 10;
   }
 </style>
 </head>
@@ -81,129 +113,228 @@
 
 <div id="gameArea">
   <div id="score">Score: 0</div>
-  <!-- Use your image as the car -->
-  <img id="car" src="https://i.ibb.co/Y7sxXKx6/grok-image-1769426657058.jpg" alt="Car" />
   <button id="restartBtn">Restart</button>
+  <img id="gameOverImage" src="https://i.ibb.co/4gf11SFC/IMG-20260203-100931.jpg" />
 </div>
 
-<!-- Sound effects -->
-<audio id="collisionSound" src="https://www.soundjay.com/buttons/sounds/button-09.mp3" preload="auto"></audio>
-<audio id="pointSound" src="https://www.soundjay.com/buttons/sounds/button-3.mp3" preload="auto"></audio>
+<!-- Loading overlay with initial image and start button -->
+<div id="loadingOverlay">
+  <img src="https://i.ibb.co/DHG52ZP5/IMG-20260203-100806.jpg" />
+  <button id="startBtn">Start Game</button>
+</div>
+
+<!-- Sounds -->
+<audio id="eatSound" src="https://actions.google.com/sounds/v1/alarms/whistle_short.ogg" preload="auto"></audio>
+<audio id="gameOverSound" src="https://www.soundjay.com/buttons/sounds/button-09.mp3" preload="auto"></audio>
 
 <script>
   const gameArea = document.getElementById('gameArea');
-  const car = document.getElementById('car');
   const scoreDisplay = document.getElementById('score');
   const restartBtn = document.getElementById('restartBtn');
-  const collisionSound = document.getElementById('collisionSound');
-  const pointSound = document.getElementById('pointSound');
+  const eatSound = document.getElementById('eatSound');
+  const gameOverSound = document.getElementById('gameOverSound');
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  const startBtn = document.getElementById('startBtn');
+  const gameOverImage = document.getElementById('gameOverImage');
 
-  let carX = 0;
+  const snakeSize = 20;
+  let snake = [];
+  let food = null;
+  let direction = 'right';
+  let nextDirection = 'right';
   let gameInterval;
-  let obstacleInterval;
-  let obstacles = [];
   let score = 0;
   let isGameOver = false;
 
-  // Initialize game
-  function resetGame() {
+  // Show loading for 2 seconds, then wait for start button
+  window.onload = () => {
+    setTimeout(() => {
+      // Keep loading overlay with start button visible
+      // Waiting for user to click start
+    }, 2000);
+  };
+
+  startBtn.onclick = () => {
+    // Remove start overlay
+    loadingOverlay.style.display = 'none';
+    startGame();
+  };
+
+  function startGame() {
+    // Remove game over image if visible
+    gameOverImage.style.display = 'none';
+
+    // Reset game state
     score = 0;
     isGameOver = false;
     scoreDisplay.innerHTML = 'Score: 0';
-    document.getElementById('score').style.color = 'white';
-
-    // Reset car position
-    const areaW = gameArea.clientWidth;
-    const carW = car.offsetWidth;
-    carX = areaW / 2 - carW / 2;
-    car.style.left = carX + 'px';
-
-    // Remove obstacles
-    obstacles.forEach(obs => gameArea.removeChild(obs));
-    obstacles = [];
-
-    // Hide restart button
+    scoreDisplay.style.color = 'white';
     restartBtn.style.display = 'none';
 
-    // Restart game loop
-    gameInterval = setInterval(updateGame, 30);
-    obstacleInterval = setInterval(createObstacle, 1000);
+    // Remove existing snake segments
+    snake.forEach(s => gameArea.removeChild(s));
+    snake = [];
+    if (food) gameArea.removeChild(food);
+    food = null;
+
+    // Create snake
+    const startX = Math.floor(gameArea.clientWidth / 2 / snakeSize) * snakeSize;
+    const startY = Math.floor(gameArea.clientHeight / 2 / snakeSize) * snakeSize;
+    for (let i=0; i<3; i++) {
+      addSegment(startX - i*snakeSize, startY);
+    }
+
+    // Create food
+    createFood();
+
+    // Reset direction
+    direction = 'right';
+    nextDirection = 'right';
+
+    // Start game loop
+    clearInterval(gameInterval);
+    gameInterval = setInterval(updateGame, 150);
   }
 
-  // Event listener for restart
-  restartBtn.onclick = () => {
-    resetGame();
-  };
+  function addSegment(x, y) {
+    const segment = document.createElement('div');
+    segment.className = 'snake';
+    segment.style.left = x + 'px';
+    segment.style.top = y + 'px';
+    segment.style.backgroundImage = 'url(https://i.ibb.co/Y7sxXKx6/grok-image-1769426657058.jpg)';
+    segment.style.backgroundSize = 'cover';
+    gameArea.appendChild(segment);
+    snake.push(segment);
+  }
 
-  // Car controls
+  function createFood() {
+    const maxX = Math.floor((gameArea.clientWidth - snakeSize) / snakeSize);
+    const maxY = Math.floor((gameArea.clientHeight - snakeSize) / snakeSize);
+    const side = Math.random() < 0.5 ? 'left' : 'right';
+
+    let foodX, foodY;
+    if (side === 'left') {
+      foodX = 0;
+    } else {
+      foodX = maxX * snakeSize;
+    }
+    foodY = Math.floor(Math.random() * (maxY + 1)) * snakeSize;
+
+    if (food) gameArea.removeChild(food);
+    const foodEl = document.createElement('div');
+    foodEl.className = 'food';
+    foodEl.style.left = foodX + 'px';
+    foodEl.style.top = foodY + 'px';
+
+    gameArea.appendChild(foodEl);
+    food = foodEl;
+  }
+
   document.addEventListener('keydown', (e) => {
     if (isGameOver) return;
-    const step = 20;
-    const areaW = gameArea.clientWidth;
-    const carW = car.offsetWidth;
-    if (e.key === 'ArrowLeft') {
-      carX = Math.max(0, carX - step);
-    } else if (e.key === 'ArrowRight') {
-      carX = Math.min(areaW - carW, carX + step);
+    if (e.key === 'ArrowUp' && direction !== 'down') {
+      nextDirection = 'up';
+    } else if (e.key === 'ArrowDown' && direction !== 'up') {
+      nextDirection = 'down';
+    } else if (e.key === 'ArrowLeft' && direction !== 'right') {
+      nextDirection = 'left';
+    } else if (e.key === 'ArrowRight' && direction !== 'left') {
+      nextDirection = 'right';
     }
-    car.style.left = carX + 'px';
   });
 
-  // Create obstacles
-  function createObstacle() {
-    const obstacle = document.createElement('div');
-    obstacle.className = 'obstacle';
-    const maxX = gameArea.clientWidth - 60;
-    const obstacleX = Math.random() * maxX;
-    obstacle.style.left = obstacleX + 'px';
-    obstacle.style.top = '-60px';
-    gameArea.appendChild(obstacle);
-    obstacles.push(obstacle);
-  }
+  let lastTouchX = null;
+  let lastTouchY = null;
+  gameArea.addEventListener('touchstart', (e) => {
+    lastTouchX = e.touches[0].clientX;
+    lastTouchY = e.touches[0].clientY;
+  });
+  gameArea.addEventListener('touchmove', (e) => {
+    if (isGameOver) return;
+    const touchX = e.touches[0].clientX;
+    const touchY = e.touches[0].clientY;
+    const deltaX = touchX - lastTouchX;
+    const deltaY = touchY - lastTouchY;
+    if (Math.abs(deltaX) > Math.abs(deltaY)) {
+      if (deltaX > 0 && direction !== 'left') {
+        nextDirection = 'right';
+      } else if (deltaX < 0 && direction !== 'right') {
+        nextDirection = 'left';
+      }
+    } else {
+      if (deltaY > 0 && direction !== 'up') {
+        nextDirection = 'down';
+      } else if (deltaY < 0 && direction !== 'down') {
+        nextDirection = 'up';
+      }
+    }
+    lastTouchX = touchX;
+    lastTouchY = touchY;
+  });
 
-  // Main game update
   function updateGame() {
-    for (let i = obstacles.length - 1; i >= 0; i--) {
-      const obs = obstacles[i];
-      let top = obs.offsetTop + 5;
-      obs.style.top = top + 'px';
+    direction = nextDirection;
+    const head = snake[0];
+    let x = parseFloat(head.style.left);
+    let y = parseFloat(head.style.top);
+    const areaW = gameArea.clientWidth;
+    const areaH = gameArea.clientHeight;
 
-      // Check collision
-      if (
-        top + 60 >= car.offsetTop &&
-        top <= car.offsetTop + 120 &&
-        parseFloat(obs.style.left) < carX + car.offsetWidth &&
-        parseFloat(obs.style.left) + 60 > carX
-      ) {
+    if (direction === 'right') x += snakeSize;
+    if (direction === 'left') x -= snakeSize;
+    if (direction === 'up') y -= snakeSize;
+    if (direction === 'down') y += snakeSize;
+
+    // Wrap around
+    if (x < 0) x = areaW - snakeSize;
+    if (x >= areaW) x = 0;
+    if (y < 0) y = areaH - snakeSize;
+    if (y >= areaH) y = 0;
+
+    // Check self collision
+    for (let i=1; i<snake.length; i++) {
+      const s = snake[i];
+      if (parseFloat(s.style.left) === x && parseFloat(s.style.top) === y) {
         endGame();
-        collisionSound.play();
         return;
       }
+    }
 
-      // Remove obstacle if out of screen
-      if (top > gameArea.clientHeight) {
-        gameArea.removeChild(obs);
-        obstacles.splice(i, 1);
-        score++;
-        scoreDisplay.innerHTML = 'Score: ' + score;
-        pointSound.play();
-      }
+    const tail = snake.pop();
+
+    // Check food
+    if (x === parseFloat(food.style.left) && y === parseFloat(food.style.top)) {
+      score++;
+      scoreDisplay.innerHTML = 'Score: ' + score;
+      addSegment(x, y);
+      createFood();
+      eatSound.currentTime = 0;
+      eatSound.play();
+    } else {
+      tail.style.left = x + 'px';
+      tail.style.top = y + 'px';
+      snake.unshift(tail);
     }
   }
 
   function endGame() {
     clearInterval(gameInterval);
-    clearInterval(obstacleInterval);
     isGameOver = true;
     document.getElementById('score').style.color = 'red';
     document.getElementById('score').innerHTML = 'Game Over! Final Score: ' + score;
     restartBtn.style.display = 'block';
+    // Show game over image below restart
+    gameOverImage.style.display = 'block';
+    // Play sound
+    gameOverSound.currentTime = 0;
+    gameOverSound.play();
   }
 
-  // Start the game initially
-  resetGame();
-
+  restartBtn.onclick = () => {
+    // Hide game over image
+    gameOverImage.style.display = 'none';
+    startGame();
+  };
 </script>
-
 </body>
 </html>
